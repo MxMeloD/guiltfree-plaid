@@ -117,6 +117,28 @@ app.get("/items", async (_req, res) => {
   res.json({ items: state.items.map((i) => i.item_id) });
 });
 
+// Current balances for every account across every linked bank.
+app.get("/balances", async (_req, res) => {
+  try {
+    const state = await loadState();
+    const out = [];
+    for (const item of state.items) {
+      try {
+        const r = await plaid.accountsGet({ access_token: item.access_token });
+        for (const a of r.data.accounts) {
+          out.push({
+            account_id: a.account_id,
+            current: a.balances.current,
+            available: a.balances.available,
+            type: a.type,
+          });
+        }
+      } catch (e) { console.error("balances failed:", e?.response?.data?.error_message || e.message); }
+    }
+    res.json({ accounts: out });
+  } catch (e) { fail(res, e); }
+});
+
 // Official branding for every linked bank: name + real logo (base64 PNG) + primary color,
 // straight from Plaid's institution registry. Cached per item in Redis after first fetch.
 app.get("/institutions", async (_req, res) => {
@@ -150,6 +172,15 @@ app.get("/institutions", async (_req, res) => {
     await saveState(state);   // cache what we learned
     res.json({ institutions: out });
   } catch (e) { fail(res, e); }
+});
+
+// Forget sync cursors so the next /transactions/sync re-pulls FULL history (the app de-dupes by
+// transaction_id, so this is safe — used to backfill fields like personal_finance_category).
+app.post("/reset-cursors", async (_req, res) => {
+  const state = await loadState();
+  for (const item of state.items) item.cursor = null;
+  await saveState(state);
+  res.json({ ok: true, items: state.items.length });
 });
 
 // Unlink a bank and free its Plaid slot.
