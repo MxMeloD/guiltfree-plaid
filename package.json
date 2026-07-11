@@ -1,0 +1,12 @@
+{
+  "name": "guiltfree-plaid-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "server.js",
+  "engines": { "node": ">=18" },
+  "scripts": { "start": "node server.js" },
+  "dependencies": {
+    "express": "^4.19.2",
+    "plaid": "^27.0.0"
+  }
+}

@@ -1,0 +1,20 @@
+# One-click deploy to Render (free tier). In the Render dashboard: New ▸ Blueprint ▸ point at this repo.
+# Then set the secret env vars (marked sync:false) when prompted.
+services:
+  - type: web
+    name: guiltfree-plaid
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: PLAID_ENV
+        value: production
+      - key: PLAID_CLIENT_ID
+        sync: false
+      - key: PLAID_SECRET
+        sync: false
+      - key: PLAID_ACCESS_TOKEN
+        sync: false
+      - key: PLAID_REDIRECT_URI
+        sync: false
