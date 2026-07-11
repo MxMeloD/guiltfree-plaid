@@ -139,6 +139,54 @@ app.get("/balances", async (_req, res) => {
   } catch (e) { fail(res, e); }
 });
 
+// Live liabilities: per credit card — last statement balance, minimum due, next due date.
+// Items without liability data just skip (checking-only banks, etc).
+app.get("/liabilities", async (_req, res) => {
+  try {
+    const state = await loadState();
+    const out = [];
+    for (const item of state.items) {
+      try {
+        const r = await plaid.liabilitiesGet({ access_token: item.access_token });
+        for (const c of r.data.liabilities.credit || []) {
+          out.push({
+            account_id: c.account_id,
+            last_statement_balance: c.last_statement_balance,
+            minimum_payment_amount: c.minimum_payment_amount,
+            next_payment_due_date: c.next_payment_due_date,
+            last_statement_issue_date: c.last_statement_issue_date,
+          });
+        }
+        for (const m of r.data.liabilities.mortgage || []) {
+          out.push({
+            account_id: m.account_id,
+            minimum_payment_amount: m.next_monthly_payment,
+            next_payment_due_date: m.next_payment_due_date,
+          });
+        }
+      } catch (e) { /* this bank has no liability data — fine */ }
+    }
+    res.json({ liabilities: out });
+  } catch (e) { fail(res, e); }
+});
+
+// Investment holdings + securities across all linked banks (Robinhood, SoFi Self-Directed…).
+app.get("/investments", async (_req, res) => {
+  try {
+    const state = await loadState();
+    const holdings = [];
+    const securities = {};
+    for (const item of state.items) {
+      try {
+        const r = await plaid.investmentsHoldingsGet({ access_token: item.access_token });
+        holdings.push(...r.data.holdings);
+        for (const s of r.data.securities) securities[s.security_id] = s;
+      } catch (e) { /* this bank has no investment data — fine */ }
+    }
+    res.json({ holdings, securities: Object.values(securities) });
+  } catch (e) { fail(res, e); }
+});
+
 // Official branding for every linked bank: name + real logo (base64 PNG) + primary color,
 // straight from Plaid's institution registry. Cached per item in Redis after first fetch.
 app.get("/institutions", async (_req, res) => {
