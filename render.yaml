@@ -1,5 +1,5 @@
-# One-click deploy to Render (free tier). In the Render dashboard: New ▸ Blueprint ▸ point at this repo.
-# Then set the secret env vars (marked sync:false) when prompted.
+# Deploy to Render (free). New ▸ Blueprint ▸ this repo. Provisions the web service AND a durable
+# Key Value (Redis) store, and auto-wires REDIS_URL between them — no manual env copying.
 services:
   - type: web
     name: guiltfree-plaid
@@ -14,7 +14,16 @@ services:
         sync: false
       - key: PLAID_SECRET
         sync: false
-      - key: PLAID_ACCESS_TOKEN
-        sync: false
       - key: PLAID_REDIRECT_URI
         sync: false
+      - key: REDIS_URL
+        fromService:
+          name: guiltfree-kv
+          type: keyvalue
+          property: connectionString
+
+  - type: keyvalue
+    name: guiltfree-kv
+    plan: free
+    maxmemoryPolicy: noeviction   # never evict our saved bank tokens
+    ipAllowList: []               # internal connections only

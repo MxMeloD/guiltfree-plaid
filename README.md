@@ -36,10 +36,10 @@ Most big US banks require **OAuth** in production. For that Plaid needs a **redi
 - The iOS app also needs that universal link configured (Associated Domains). Tell me your domain and I'll
   wire the app side. Until then, banks that don't need OAuth will still link fine.
 
-## Persistence
-After you link a bank once, copy the `access_token` the backend stored (it's logged / in `/tmp/guiltfree-plaid.json`)
-into the **`PLAID_ACCESS_TOKEN`** env var so the link survives restarts. The sync cursor is best-effort; if it
-resets, the next sync just re-pulls everything (the app de-dupes).
+## Persistence (automatic)
+`render.yaml` provisions a durable **Key Value (Redis)** store and auto-wires `REDIS_URL`. Every linked
+bank's token + sync cursor lives there, so connections survive restarts/redeploys — you link each bank
+once and never re-link. Multiple banks are supported (each `Connect` adds another; nothing is overwritten).
 
 ## Endpoints (what the app calls)
 - `POST /link/token/create` → `{ link_token }`
