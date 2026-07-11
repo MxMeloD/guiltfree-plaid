@@ -117,6 +117,41 @@ app.get("/items", async (_req, res) => {
   res.json({ items: state.items.map((i) => i.item_id) });
 });
 
+// Official branding for every linked bank: name + real logo (base64 PNG) + primary color,
+// straight from Plaid's institution registry. Cached per item in Redis after first fetch.
+app.get("/institutions", async (_req, res) => {
+  try {
+    const state = await loadState();
+    const out = [];
+    for (const item of state.items) {
+      try {
+        if (!item.institution) {
+          const ig = await plaid.itemGet({ access_token: item.access_token });
+          const instId = ig.data.item.institution_id;
+          if (instId) {
+            const r = await plaid.institutionsGetById({
+              institution_id: instId,
+              country_codes: ["US"],
+              options: { include_optional_metadata: true },   // ← includes logo + primary_color
+            });
+            item.institution = {
+              id: instId,
+              name: r.data.institution.name,
+              logo: r.data.institution.logo || null,
+              color: r.data.institution.primary_color || null,
+            };
+          }
+        }
+        if (item.institution) out.push({ item_id: item.item_id, ...item.institution });
+      } catch (e) {
+        console.error("institution fetch failed:", e?.response?.data?.error_message || e.message);
+      }
+    }
+    await saveState(state);   // cache what we learned
+    res.json({ institutions: out });
+  } catch (e) { fail(res, e); }
+});
+
 // Unlink a bank and free its Plaid slot.
 app.post("/item/remove", async (req, res) => {
   try {
