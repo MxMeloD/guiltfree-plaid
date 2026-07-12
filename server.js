@@ -55,6 +55,8 @@ app.post("/link/token/create", async (_req, res) => {
       user: { client_user_id: "guiltfree-user" },
       client_name: "GuiltFree",
       products: ["transactions"],
+      // Grab card statement data + holdings too, wherever the bank supports them.
+      optional_products: ["liabilities", "investments"],
       country_codes: ["US"],
       language: "en",
       ...(process.env.PLAID_REDIRECT_URI ? { redirect_uri: process.env.PLAID_REDIRECT_URI } : {}),
@@ -145,6 +147,7 @@ app.get("/liabilities", async (_req, res) => {
   try {
     const state = await loadState();
     const out = [];
+    const errors = [];
     for (const item of state.items) {
       try {
         const r = await plaid.liabilitiesGet({ access_token: item.access_token });
@@ -164,9 +167,13 @@ app.get("/liabilities", async (_req, res) => {
             next_payment_due_date: m.next_payment_due_date,
           });
         }
-      } catch (e) { /* this bank has no liability data — fine */ }
+      } catch (e) {
+        const code = e?.response?.data?.error_code || e.message;
+        console.error("liabilities failed for item:", code);
+        errors.push({ item_id: item.item_id, error: code });
+      }
     }
-    res.json({ liabilities: out });
+    res.json({ liabilities: out, errors });
   } catch (e) { fail(res, e); }
 });
 
@@ -176,14 +183,19 @@ app.get("/investments", async (_req, res) => {
     const state = await loadState();
     const holdings = [];
     const securities = {};
+    const errors = [];
     for (const item of state.items) {
       try {
         const r = await plaid.investmentsHoldingsGet({ access_token: item.access_token });
         holdings.push(...r.data.holdings);
         for (const s of r.data.securities) securities[s.security_id] = s;
-      } catch (e) { /* this bank has no investment data — fine */ }
+      } catch (e) {
+        const code = e?.response?.data?.error_code || e.message;
+        console.error("investments failed for item:", code);
+        errors.push({ item_id: item.item_id, error: code });
+      }
     }
-    res.json({ holdings, securities: Object.values(securities) });
+    res.json({ holdings, securities: Object.values(securities), errors });
   } catch (e) { fail(res, e); }
 });
 
